@@ -172,6 +172,15 @@ do(window) ->
       inactiveTimeoutIntervallCheck: 0.5
       waitingListTimeout: 4
       waitingListTimeoutIntervallCheck: 0.5
+      # Callbacks
+      onReady: undefined
+      onCloseAnimationEnd: undefined
+      onError: undefined
+      onOpenAnimationEnd: undefined
+      onConnectionReestablished: undefined
+      onSessionClosed: undefined
+      onConnectionEstablished: undefined
+      onCssLoaded: undefined
 
     logPrefix: 'chat'
     _messageCount: 0
@@ -749,6 +758,8 @@ do(window) ->
         btn.addEventListener('click', @open)
         btn.classList.remove(@inactiveClass)
 
+      @options.onReady?()
+
       if @options.show
         @show()
 
@@ -764,6 +775,8 @@ do(window) ->
         @destroy(remove: false)
       else
         @destroy(remove: true)
+
+      @options.onError?(message)
 
     onReopenSession: (data) =>
       @log.debug 'old messages', data.session
@@ -889,7 +902,7 @@ do(window) ->
       @el.clientHeight
 
       if !@sessionId
-        @el.addEventListener 'transitionend', @onOpenTransitionend
+        @el.addEventListener 'transitionend', @onOpenAnimationEnd
         @el.classList.add 'zammad-chat--animate'
         # force redraw
         @el.clientHeight
@@ -901,15 +914,16 @@ do(window) ->
         )
       else
         @el.style.transform = ''
-        @onOpenTransitionend()
+        @onOpenAnimationEnd()
 
-    onOpenTransitionend: =>
-      @el.removeEventListener 'transitionend', @onOpenTransitionend
+    onOpenAnimationEnd: =>
+      @el.removeEventListener 'transitionend', @onOpenAnimationEnd
       @el.classList.remove 'zammad-chat--animate'
       @idleTimeout.stop()
 
       if @isFullscreen
         @disableScrollOnRoot()
+      @options.onOpenAnimationEnd?()
 
     sessionClose: =>
       # send close
@@ -956,15 +970,15 @@ do(window) ->
 
       # close window
       remainerHeight = @el.clientHeight - @el.querySelector('.zammad-chat-header').offsetHeight
-      @el.addEventListener 'transitionend', @onCloseTransitionend
+      @el.addEventListener 'transitionend', @onCloseAnimationEnd
       @el.classList.add 'zammad-chat--animate'
       # force redraw
       document.offsetHeight
       # animate out
       @el.style.transform = "translateY(#{remainerHeight}px)"
 
-    onCloseTransitionend: =>
-      @el.removeEventListener 'transitionend', @onCloseTransitionend
+    onCloseAnimationEnd: =>
+      @el.removeEventListener 'transitionend', @onCloseAnimationEnd
       @el.classList.remove 'zammad-chat-is-open', 'zammad-chat--animate'
       @el.style.transform = ''
 
@@ -974,6 +988,7 @@ do(window) ->
       @el.querySelector('.zammad-chat-agent-status').classList.add('zammad-chat-is-hidden')
 
       @isOpen = false
+      @options.onCloseAnimationEnd?()
 
       @io.reconnect()
 
@@ -1140,12 +1155,14 @@ do(window) ->
       @lastAddedType = 'status'
       @setAgentOnlineState 'online'
       @addStatus @T('Connection re-established')
+      @options.onConnectionReestablished?()
 
     onSessionClosed: (data) ->
       @addStatus @T('Chat closed by %s', data.realname)
       @disableInput()
       @setAgentOnlineState 'offline'
       @inactiveTimeout.stop()
+      @options.onSessionClosed?(data)
 
     setSessionId: (id) =>
       @sessionId = id
@@ -1185,6 +1202,7 @@ do(window) ->
       @waitingListTimeout.stop()
       @idleTimeout.stop()
       @inactiveTimeout.start()
+      @options.onConnectionEstablished?(data)
 
     showCustomerTimeout: ->
       @el.querySelector('.zammad-chat-modal').innerHTML = @view('customer_timeout')
@@ -1237,6 +1255,7 @@ do(window) ->
       @cssLoaded = true
       if @socketReady
         @onReady()
+      @options.onCssLoaded?()
 
     startTimeoutObservers: =>
       @idleTimeout = new Timeout(
